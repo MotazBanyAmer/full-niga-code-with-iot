@@ -44,10 +44,10 @@ PubSubClient mqttClient(wifiClient);
 #define hum_low 20
 #define hum_high 50
 
-#define state_nothing 0
-#define state_heating 1
-#define state_humidifying 2
-#define state_suction 3
+// #define state_nothing 0
+// #define state_heating 1
+// #define state_humidifying 2
+// #define state_suction 3
 
 uint8_t currentState = state_nothing;
 /*
@@ -70,7 +70,7 @@ uint8_t getState(float temp, float humidity)
 }
 */
 bool turnedOn = 0;
-
+//! note: if the devices didnt turn on ON function/command, flip HIGH and LOW on code, or change on the relay terminal from NC to NO connector
 void turn_light_On()
 {
   digitalWrite(relay_light, HIGH);
@@ -78,6 +78,15 @@ void turn_light_On()
 void turn_light_Off()
 {
   digitalWrite(relay_light, LOW);
+}
+
+void turn_humidifier_On()
+{
+  digitalWrite(relay_humidifier, HIGH);
+}
+void turn_humidifier_Off()
+{
+  digitalWrite(relay_humidifier, LOW);
 }
 
 void turn_heater_On()
@@ -138,20 +147,20 @@ void setup()
 void loop()
 {
 
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
+  float value_humidity = dht.readHumidity();
+  float value_temperature = dht.readTemperature();
   int sm = analogRead(SOILPIN);
   int smPercent = map(sm, 0, 4095, 0, 100);
 
   lcd.setCursor(0, 0);
   lcd.print("Temp:");
-  lcd.print(t);
+  lcd.print(value_temperature);
   lcd.print((char)223);
   lcd.print("C ");
 
   lcd.setCursor(0, 1);
   lcd.print("Hum:");
-  lcd.print(h);
+  lcd.print(value_humidity);
   lcd.print("% ");
 
   lcd.setCursor(9, 0);
@@ -174,23 +183,51 @@ void loop()
       turn_light_Off();
     }
 
-    currentState = getState(t, h);
-    if (currentState == state_nothing)
+    // procedure
+
+    if (value_temperature < temp_low)
     {
-      // stop all on
+      turn_heater_On();
+      turn_fan_Off();
+      delay(5000);
     }
-    if (currentState == state_humidifying)
+    if (value_temperature > temp_high)
     {
-      // todo  humidifier on
+      turn_heater_Off();
+      turn_fan_On();
+      delay(5000);
     }
-    if (currentState == state_suction)
+    if (value_humidity < hum_low)
     {
-      // fan on
+      turn_humidifier_On();
+      turn_fan_Off();
+      delay(5000);
     }
-    if (currentState == state_heating)
+    if (value_humidity > hum_high)
     {
-      // heater on
+      turn_humidifier_Off();
+      turn_fan_On();
+      delay(5000);
     }
+
+    /*
+    below is not used, delete if the above is enough
+
+    // currentState = getState(value_temperature, value_humidity);
+
+    // if (currentState == state_humidifying)
+    // {
+    todo humidifier on
+    // }
+    // if (currentState == state_suction)
+    // {
+    //   // fan on
+    // }
+    // if (currentState == state_heating)
+    // {
+    //   // heater on
+    // }
+    */
   }
 
   // Connect to MQTT broker
@@ -198,8 +235,8 @@ void loop()
   {
     connectToMqtt();
   }
-  mqttClient.publish("bloomingmushroom/feeds/temperature", String(t).c_str());
-  mqttClient.publish("bloomingmushroom/feeds/humidity", String(h).c_str());
+  mqttClient.publish("bloomingmushroom/feeds/temperature", String(value_temperature).c_str());
+  mqttClient.publish("bloomingmushroom/feeds/humidity", String(value_humidity).c_str());
   delay(2500);
   mqttClient.publish("bloomingmushroom/feeds/light", String(lPercent).c_str());
   mqttClient.publish("bloomingmushroom/feeds/soil", String(smPercent).c_str());
