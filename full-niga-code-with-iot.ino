@@ -13,7 +13,18 @@ DHT dht(DHTPIN, DHTTYPE);
 #define SOILPIN 14
 #define BUZZERPIN 18
 
+#define button 4
+// TODO define relays pins numbers
+#define relay_heater 12 // todo chagne the number of pins
+#define relay_fan 13
+#define relay_humidifier 16
+#define relay_light 17
+
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+#define lightOnSetpoint_hours 4
+uint32_t lightOnSetpoint_seconds = 0;
+uint32_t systemOnTime = 0;
 
 // WiFi credentials
 const char *ssid = "RoKiTech";
@@ -39,98 +50,149 @@ PubSubClient mqttClient(wifiClient);
 #define state_suction 3
 
 uint8_t currentState = state_nothing;
-
+/*
 uint8_t getState(float temp, float humidity)
 {
+
+  // todo
+  if (temp < temp_low)
   {
-    // todo
-    if (t < temp_low)
+  }
+  if (temp > temp_high)
+  {
+  }
+  if (humidity < hum_low)
+  {
+  }
+  if (humidity > hum_high)
+  {
+  }
+}
+*/
+bool turnedOn = 0;
+
+void turn_light_On()
+{
+  digitalWrite(relay_light, HIGH);
+}
+void turn_light_Off()
+{
+  digitalWrite(relay_light, LOW);
+}
+
+void turn_heater_On()
+{
+  digitalWrite(relay_heater, HIGH);
+}
+void turn_heater_Off()
+{
+  digitalWrite(relay_heater, LOW);
+}
+
+void turn_fan_On()
+{
+  digitalWrite(relay_fan, HIGH);
+}
+void turn_fan_Off()
+{
+  digitalWrite(relay_fan, LOW);
+}
+
+void setup()
+{
+  lightOnSetpoint_seconds = lightOnSetpoint_hours * 60 * 60; // hrs*60m*60s
+
+  lcd.begin();
+  lcd.backlight();
+  pinMode(button, INPUT_PULLUP);
+
+  pinMode(relay_fan, OUTPUT);
+  pinMode(relay_heater, OUTPUT);
+  pinMode(relay_light, OUTPUT);
+  pinMode(relay_humidifier, OUTPUT);
+
+  turn_light_On();
+
+  pinMode(BUZZERPIN, OUTPUT);
+  // Start serial communication
+  Serial.begin(115200);
+  delay(2000);
+  // Connect to WiFi
+  Serial.println("Connecting To: ");
+  Serial.println(ssid);
+  Serial.println(password);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+
+  // Set up MQTT client
+  mqttClient.setServer(server, port);
+}
+
+void loop()
+{
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  int sm = analogRead(SOILPIN);
+  int smPercent = map(sm, 0, 4095, 0, 100);
+
+  lcd.setCursor(0, 0);
+  lcd.print("Temp:");
+  lcd.print(t);
+  lcd.print((char)223);
+  lcd.print("C ");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Hum:");
+  lcd.print(h);
+  lcd.print("% ");
+
+  lcd.setCursor(9, 0);
+  lcd.print("Soil:");
+  lcd.print(smPercent);
+  lcd.print("% ");
+
+  if (digitalRead(button) == 0)
+  {
+    delay(350); // debouncing
+    turnedOn != turnedOn;
+    systemOnTime = millis() / 1000;
+  }
+  // if system enable
+  if (turnedOn == 1)
+  {
+
+    if (millis() / 1000 > (lightOnSetpoint_seconds + systemOnTime)) // time needed + start time when we pressed the button
     {
+      turn_light_Off();
     }
-    if (t > temp_high)
+
+    currentState = getState(t, h);
+    if (currentState == state_nothing)
     {
+      // stop all on
     }
-    if (t < hum_low)
+    if (currentState == state_humidifying)
     {
+      // todo  humidifier on
     }
-    if (t > hum_high)
+    if (currentState == state_suction)
     {
+      // fan on
+    }
+    if (currentState == state_heating)
+    {
+      // heater on
     }
   }
 
-  void setup()
-  {
-
-    lcd.begin();
-    lcd.backlight();
-
-    pinMode(BUZZERPIN, OUTPUT);
-    // Start serial communication
-    Serial.begin(115200);
-    delay(2000);
-    // Connect to WiFi
-    Serial.println("Connecting To: ");
-    Serial.println(ssid);
-    Serial.println(password);
-
-    WiFi.begin(ssid, password);
-
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(1000);
-      Serial.println("Connecting to WiFi...");
-    }
-    Serial.println("Connected to WiFi");
-
-    // Set up MQTT client
-    mqttClient.setServer(server, port);
-  }
-
-  void loop()
-  {
-
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
-    int sm = analogRead(SOILPIN);
-    int smPercent = map(sm, 0, 4095, 0, 100);
-
-    lcd.setCursor(0, 0);
-    lcd.print("Temp:");
-    lcd.print(t);
-    lcd.print((char)223);
-    lcd.print("C ");
-
-    lcd.setCursor(0, 1);
-    lcd.print("Hum:");
-    lcd.print(h);
-    lcd.print("% ");
-
-    lcd.setCursor(9, 0);
-    lcd.print("Soil:");
-    lcd.print(smPercent);
-    lcd.print("% ");
-    // if system enable
-    if (turnedOn == 1)
-    {
-      currentState = getState(t, h);
-      if (currentState == state_nothing)
-      {
-        // stop all on
-      }
-      if (currentState == state_humidifying)
-      {
-        // todo  humidifier on
-      }
-      if (currentState == state_suction)
-      {
-        // fan on
-      }
-      if (currentState == state_heating)
-      {
-        // heater on
-      }
-    }
-  }
   // Connect to MQTT broker
   if (!mqttClient.connected())
   {
